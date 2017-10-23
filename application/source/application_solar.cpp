@@ -25,13 +25,14 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
 {
   initializeGeometry();
   initializeShaderPrograms();
+    m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 35.0f});
 }
 
 void ApplicationSolar::render() const {
   // bind shader to upload uniforms
   glUseProgram(m_shaders.at("planet").handle);
 
-  glm::fmat4 model_matrix = glm::rotate(glm::fmat4{}, float(glfwGetTime()), glm::fvec3{0.0f, 1.0f, 0.0f});
+  /*glm::fmat4 model_matrix = glm::rotate(glm::fmat4{}, float(glfwGetTime()), glm::fvec3{0.0f, 1.0f, 0.0f});
   model_matrix = glm::translate(model_matrix, glm::fvec3{0.0f, 0.0f, -1.0f});
   glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"),
                      1, GL_FALSE, glm::value_ptr(model_matrix));
@@ -39,13 +40,42 @@ void ApplicationSolar::render() const {
   // extra matrix for normal transformation to keep them orthogonal to surface
   glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(m_view_transform) * model_matrix);
   glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("NormalMatrix"),
-                     1, GL_FALSE, glm::value_ptr(normal_matrix));
+                     1, GL_FALSE, glm::value_ptr(normal_matrix));*/
 
   // bind the VAO to draw
   glBindVertexArray(planet_object.vertex_AO);
+    drawPlanet(0.0f, 0.0f, glm::fmat4{}, 4.0f);
+    drawPlanet(3.0f, 1.0f, glm::fmat4{}, 1.0f);
+    drawPlanet(7.0f, 0.95f, glm::fmat4{}, 1.5f);
+    glm::fmat4 planet_pos = drawPlanet(11.0f, 0.9f, glm::fmat4{}, 0.75f);
+    drawPlanet(2.0f, 1.5f, planet_pos, 0.5f);
+     drawPlanet(15.0f, 0.85f, glm::fmat4{}, 1.0f);
+     drawPlanet(19.0f, 0.8f, glm::fmat4{}, 1.5f);
+     drawPlanet(23.0f, 0.7f, glm::fmat4{}, 2.0f);
+     drawPlanet(27.0f, 0.65f, glm::fmat4{}, 1.5f);
+     drawPlanet(31.0f, 0.6f, glm::fmat4{}, 0.75f);
 
   // draw bound vertex array using bound shader
-  glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
+ // glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
+}
+
+glm::fmat4 ApplicationSolar::drawPlanet(float distance, float rotation, glm::fmat4 position, float scale) const
+{
+    glm::fmat4 model_matrix = glm::rotate(position, float(glfwGetTime()) * rotation, glm::fvec3{0.0f, 1.0f, 0.0f});
+    model_matrix = glm::translate(model_matrix, glm::fvec3{0.0f, 0.0f, -distance});
+    model_matrix = glm::scale(model_matrix, glm::fvec3{scale, scale, scale});
+    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"),
+                       1, GL_FALSE, glm::value_ptr(model_matrix));
+    
+    // extra matrix for normal transformation to keep them orthogonal to surface
+    glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(m_view_transform) * model_matrix);
+    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("NormalMatrix"),
+                       1, GL_FALSE, glm::value_ptr(normal_matrix));
+    
+    glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
+    
+    return model_matrix;
+
 }
 
 void ApplicationSolar::updateView() {
@@ -75,11 +105,11 @@ void ApplicationSolar::uploadUniforms() {
 
 // handle key input
 void ApplicationSolar::keyCallback(int key, int scancode, int action, int mods) {
-  if (key == GLFW_KEY_W && action == GLFW_PRESS) {
+  if (key == GLFW_KEY_W && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
     m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, -0.1f});
     updateView();
   }
-  else if (key == GLFW_KEY_S && action == GLFW_PRESS) {
+  else if (key == GLFW_KEY_S && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
     m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 0.1f});
     updateView();
   }
@@ -87,6 +117,9 @@ void ApplicationSolar::keyCallback(int key, int scancode, int action, int mods) 
 
 //handle delta mouse movement input
 void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
+    glm::fmat4 rotation = glm::rotate(glm::fmat4{}, float (pos_y/240.0f), glm::fvec3{1.0f, 0.0f, 0.0f});
+    m_view_transform = rotation * m_view_transform;
+    updateView();
   // mouse handling
 }
 
