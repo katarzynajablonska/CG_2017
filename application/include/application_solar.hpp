@@ -20,6 +20,18 @@ struct StarField
     void render(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const;
 };
 
+struct Orbit
+{
+    std::vector<GLfloat> points;
+    GLuint points_vbo;
+    int count;
+    GLuint vba;
+    
+    void Init();
+    void bind(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const;
+    void render(const glm::fmat4& model, const shader_program& shader) const;
+};
+
 class ApplicationSolar : public Application {
  public:
   // allocate and initialize objects
@@ -48,6 +60,7 @@ class ApplicationSolar : public Application {
   // cpu representation of model
   model_object planet_object;
   StarField star_field;
+  Orbit orbit;
 };
 
 #endif

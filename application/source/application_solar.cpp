@@ -66,6 +66,48 @@ void StarField::render(const glm::fmat4& view, const glm::fmat4& projection, con
     glDrawArrays(GL_POINTS, 0, count);
 }
 
+void Orbit::Init()
+{
+    count = 100;
+    float step = 2 * M_PI / count;
+    for (int i = 0; i<count; i++)
+    {
+        points.push_back(cos(i * step));
+        points.push_back(0.0f);
+        points.push_back(sin(i * step));
+    }
+    
+    glGenBuffers(1, &points_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, points_vbo);
+    glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(GL_FLOAT), &points[0], GL_STATIC_DRAW);
+    
+    glGenVertexArrays(1, &vba);
+    glBindVertexArray(vba);
+    glBindBuffer(GL_ARRAY_BUFFER, points_vbo);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+    
+    //glPointSize(10.0);
+}
+
+void Orbit::bind(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const
+{
+    glUseProgram(shader.handle);
+    glUniformMatrix4fv(shader.u_locs.at("ViewMatrix"),
+                       1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(shader.u_locs.at("ProjectionMatrix"),
+                       1, GL_FALSE, glm::value_ptr(projection));
+    
+    glBindVertexArray(vba);
+}
+
+void Orbit::render(const glm::fmat4& model, const shader_program& shader) const
+{
+    glUniformMatrix4fv(shader.u_locs.at("ModelMatrix"),
+                       1, GL_FALSE, glm::value_ptr(model));
+    glDrawArrays(GL_LINE_LOOP, 0, count);
+}
+
 ApplicationSolar::ApplicationSolar(std::string const& resource_path)
  :Application{resource_path}
  ,planet_object{}
@@ -74,6 +116,7 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
   initializeShaderPrograms();
     m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 35.0f});
     star_field.Init();
+    orbit.Init();
 }
 
 void ApplicationSolar::render() const {
@@ -94,16 +137,27 @@ void ApplicationSolar::render() const {
 
   // bind the VAO to draw
   glBindVertexArray(planet_object.vertex_AO);
-    drawPlanet(0.0f, 0.0f, glm::fmat4{}, 4.0f);
-    drawPlanet(3.0f, 1.0f, glm::fmat4{}, 1.0f);
-    drawPlanet(7.0f, 0.95f, glm::fmat4{}, 1.5f);
-    glm::fmat4 planet_pos = drawPlanet(11.0f, 0.9f, glm::fmat4{}, 0.75f);
-    drawPlanet(2.0f, 1.5f, planet_pos, 0.5f);
+  drawPlanet(0.0f, 0.0f, glm::fmat4{}, 3.5f);
+  drawPlanet(5.0f, 1.0f, glm::fmat4{}, 1.0f);
+  drawPlanet(7.0f, 0.95f, glm::fmat4{}, 1.5f);
+  glm::fmat4 planet_pos = drawPlanet(11.0f, 0.9f, glm::fmat4{}, 0.75f);
+  drawPlanet(2.0f, 1.5f, planet_pos, 0.5f);
      drawPlanet(15.0f, 0.85f, glm::fmat4{}, 1.0f);
      drawPlanet(19.0f, 0.8f, glm::fmat4{}, 1.5f);
      drawPlanet(23.0f, 0.7f, glm::fmat4{}, 2.0f);
      drawPlanet(27.0f, 0.65f, glm::fmat4{}, 1.5f);
      drawPlanet(31.0f, 0.6f, glm::fmat4{}, 0.75f);
+    
+    orbit.bind(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{5.0f, 5.0f, 5.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{7.0f, 7.0f, 7.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{11.0f, 11.0f, 11.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(planet_pos, glm::fvec3{2.0f, 2.0f, 2.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{15.0f, 15.0f, 15.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{19.0f, 19.0f, 19.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{23.0f, 23.0f, 23.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{27.0f, 27.0f, 27.0f}), m_shaders.at("orbit"));
+    orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{31.0f, 31.0f, 31.0f}), m_shaders.at("orbit"));
 
   // draw bound vertex array using bound shader
  // glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
@@ -132,12 +186,14 @@ void ApplicationSolar::updateView() {
   // vertices are transformed in camera space, so camera transform must be inverted
   glm::fmat4 view_matrix = glm::inverse(m_view_transform);
   // upload matrix to gpu
+  glUseProgram(m_shaders.at("planet").handle);
   glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ViewMatrix"),
                      1, GL_FALSE, glm::value_ptr(view_matrix));
 }
 
 void ApplicationSolar::updateProjection() {
   // upload matrix to gpu
+  glUseProgram(m_shaders.at("planet").handle);
   glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"),
                      1, GL_FALSE, glm::value_ptr(m_view_projection));
 }
@@ -189,6 +245,13 @@ void ApplicationSolar::initializeShaderPrograms() {
   // request uniform locations for shader program
   m_shaders.at("starfield").u_locs["ViewMatrix"] = -1;
   m_shaders.at("starfield").u_locs["ProjectionMatrix"] = -1;
+    
+  m_shaders.emplace("orbit", shader_program{m_resource_path + "shaders/orbit.vert",
+        m_resource_path + "shaders/orbit.frag"});
+    // request uniform locations for shader program
+  m_shaders.at("orbit").u_locs["ModelMatrix"] = -1;
+  m_shaders.at("orbit").u_locs["ViewMatrix"] = -1;
+  m_shaders.at("orbit").u_locs["ProjectionMatrix"] = -1;
 }
 
 // load models
