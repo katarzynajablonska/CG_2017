@@ -16,8 +16,55 @@ using namespace gl;
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/random.hpp>
 
 #include <iostream>
+
+void StarField::Init()
+{
+    count = 400;
+    for (int i = 0; i<count; i++)
+    {
+        glm::fvec3 point = glm::sphericalRand(50.0f);
+        points.push_back(point.x);
+        points.push_back(point.y);
+        points.push_back(point.z);
+        
+        colors.push_back(glm::linearRand(0.0f, 1.0f));
+        colors.push_back(glm::linearRand(0.0f, 1.0f));
+        colors.push_back(glm::linearRand(0.0f, 1.0f));
+    }
+    
+    glGenBuffers(1, &points_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, points_vbo);
+    glBufferData(GL_ARRAY_BUFFER, points.size() * sizeof(GL_FLOAT), &points[0], GL_STATIC_DRAW);
+    glGenBuffers(1, &colors_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
+    glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(GL_FLOAT), &colors[0], GL_STATIC_DRAW);
+    
+    glGenVertexArrays(1, &vba);
+    glBindVertexArray(vba);
+    glBindBuffer(GL_ARRAY_BUFFER, points_vbo);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glBindBuffer(GL_ARRAY_BUFFER, colors_vbo);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    
+    //glPointSize(10.0);
+}
+
+void StarField::render(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const
+{
+    glUseProgram(shader.handle);
+    glUniformMatrix4fv(shader.u_locs.at("ViewMatrix"),
+                       1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(shader.u_locs.at("ProjectionMatrix"),
+                       1, GL_FALSE, glm::value_ptr(projection));
+    
+    glBindVertexArray(vba);
+    glDrawArrays(GL_POINTS, 0, count);
+}
 
 ApplicationSolar::ApplicationSolar(std::string const& resource_path)
  :Application{resource_path}
@@ -26,10 +73,13 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
   initializeGeometry();
   initializeShaderPrograms();
     m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 35.0f});
+    star_field.Init();
 }
 
 void ApplicationSolar::render() const {
   // bind shader to upload uniforms
+  star_field.render(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("starfield"));
+    
   glUseProgram(m_shaders.at("planet").handle);
 
   /*glm::fmat4 model_matrix = glm::rotate(glm::fmat4{}, float(glfwGetTime()), glm::fvec3{0.0f, 1.0f, 0.0f});
@@ -133,6 +183,12 @@ void ApplicationSolar::initializeShaderPrograms() {
   m_shaders.at("planet").u_locs["ModelMatrix"] = -1;
   m_shaders.at("planet").u_locs["ViewMatrix"] = -1;
   m_shaders.at("planet").u_locs["ProjectionMatrix"] = -1;
+    
+  m_shaders.emplace("starfield", shader_program{m_resource_path + "shaders/starfield.vert",
+                                            m_resource_path + "shaders/starfield.frag"});
+  // request uniform locations for shader program
+  m_shaders.at("starfield").u_locs["ViewMatrix"] = -1;
+  m_shaders.at("starfield").u_locs["ProjectionMatrix"] = -1;
 }
 
 // load models

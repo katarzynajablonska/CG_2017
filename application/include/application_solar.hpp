@@ -6,6 +6,20 @@
 #include "structs.hpp"
 
 // gpu representation of model
+
+struct StarField
+{
+    std::vector<GLfloat> points;
+    std::vector<GLfloat> colors;
+    int count;
+    GLuint points_vbo;
+    GLuint colors_vbo;
+    GLuint vba;
+    
+    void Init();
+    void render(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const;
+};
+
 class ApplicationSolar : public Application {
  public:
   // allocate and initialize objects
@@ -33,6 +47,7 @@ class ApplicationSolar : public Application {
 
   // cpu representation of model
   model_object planet_object;
+  StarField star_field;
 };
 
 #endif
