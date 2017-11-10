@@ -55,7 +55,7 @@ class ApplicationSolar : public Application {
   void initializeShaderPrograms();
   void initializeGeometry();
   void updateView();
-  glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale) const;
+  glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, int flags) const;
 
   // cpu representation of model
   model_object planet_object;

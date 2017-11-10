@@ -20,6 +20,13 @@ using namespace gl;
 
 #include <iostream>
 
+enum shader_flags{
+    NONE = 0,
+    SHADE = 1,
+    CEL = 2
+};
+
+
 void StarField::Init()
 {
     count = 400;
@@ -124,6 +131,7 @@ void ApplicationSolar::render() const {
   star_field.render(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("starfield"));
     
   glUseProgram(m_shaders.at("planet").handle);
+    glUniform3fv(m_shaders.at("planet").u_locs.at("LightPosition"), 1, glm::value_ptr(glm::fvec3{0.0f, 0.0f, 0.0f}));
 
   /*glm::fmat4 model_matrix = glm::rotate(glm::fmat4{}, float(glfwGetTime()), glm::fvec3{0.0f, 1.0f, 0.0f});
   model_matrix = glm::translate(model_matrix, glm::fvec3{0.0f, 0.0f, -1.0f});
@@ -137,16 +145,16 @@ void ApplicationSolar::render() const {
 
   // bind the VAO to draw
   glBindVertexArray(planet_object.vertex_AO);
-  drawPlanet(0.0f, 0.0f, glm::fmat4{}, 3.5f);
-  drawPlanet(5.0f, 1.0f, glm::fmat4{}, 1.0f);
-  drawPlanet(7.0f, 0.95f, glm::fmat4{}, 1.5f);
-  glm::fmat4 planet_pos = drawPlanet(11.0f, 0.9f, glm::fmat4{}, 0.75f);
-  drawPlanet(2.0f, 1.5f, planet_pos, 0.5f);
-     drawPlanet(15.0f, 0.85f, glm::fmat4{}, 1.0f);
-     drawPlanet(19.0f, 0.8f, glm::fmat4{}, 1.5f);
-     drawPlanet(23.0f, 0.7f, glm::fmat4{}, 2.0f);
-     drawPlanet(27.0f, 0.65f, glm::fmat4{}, 1.5f);
-     drawPlanet(31.0f, 0.6f, glm::fmat4{}, 0.75f);
+    drawPlanet(0.0f, 0.0f, glm::fmat4{}, 3.5f, glm::fvec3{1.0, 0.0, 0.0}, NONE);
+  drawPlanet(5.0f, 1.0f, glm::fmat4{}, 1.0f, glm::fvec3{0.0, 1.0, 0.0}, SHADE);
+  drawPlanet(7.0f, 0.95f, glm::fmat4{}, 1.5f, glm::fvec3{0.0, 0.0, 1.0}, SHADE);
+  glm::fmat4 planet_pos = drawPlanet(11.0f, 0.9f, glm::fmat4{}, 0.75f, glm::fvec3{0.9, 0.7, 1.0}, SHADE);
+  drawPlanet(2.0f, 1.5f, planet_pos, 0.5f, glm::fvec3{0.4, 0.5 , 0.8}, SHADE);
+     drawPlanet(15.0f, 0.85f, glm::fmat4{}, 1.0f, glm::fvec3{0.5, 0.9, 0.1}, SHADE);
+     drawPlanet(19.0f, 0.8f, glm::fmat4{}, 1.5f, glm::fvec3{0.2, 0.3, 1.0}, SHADE);
+     drawPlanet(23.0f, 0.7f, glm::fmat4{}, 2.0f, glm::fvec3{0.1, 0.6, 0.4}, SHADE);
+     drawPlanet(27.0f, 0.65f, glm::fmat4{}, 1.5f, glm::fvec3{1.0, 0.3, 0.7}, SHADE);
+     drawPlanet(31.0f, 0.6f, glm::fmat4{}, 0.75f, glm::fvec3{0.4, 0.1, 0.9}, SHADE);
     
     orbit.bind(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("orbit"));
     orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{5.0f, 5.0f, 5.0f}), m_shaders.at("orbit"));
@@ -163,8 +171,10 @@ void ApplicationSolar::render() const {
  // glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
 }
 
-glm::fmat4 ApplicationSolar::drawPlanet(float distance, float rotation, glm::fmat4 position, float scale) const
+glm::fmat4 ApplicationSolar::drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, int flags) const
 {
+    glUniform1i(m_shaders.at("planet").u_locs.at("flags"), flags);
+    glUniform3fv(m_shaders.at("planet").u_locs.at("Color"), 1, glm::value_ptr(color));
     glm::fmat4 model_matrix = glm::rotate(position, float(glfwGetTime()) * rotation, glm::fvec3{0.0f, 1.0f, 0.0f});
     model_matrix = glm::translate(model_matrix, glm::fvec3{0.0f, 0.0f, -distance});
     model_matrix = glm::scale(model_matrix, glm::fvec3{scale, scale, scale});
@@ -232,13 +242,16 @@ void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
 // load shader programs
 void ApplicationSolar::initializeShaderPrograms() {
   // store shader program objects in container
-  m_shaders.emplace("planet", shader_program{m_resource_path + "shaders/simple.vert",
-                                           m_resource_path + "shaders/simple.frag"});
+  m_shaders.emplace("planet", shader_program{m_resource_path + "shaders/planet.vert",
+                                           m_resource_path + "shaders/planet.frag"});
   // request uniform locations for shader program
   m_shaders.at("planet").u_locs["NormalMatrix"] = -1;
   m_shaders.at("planet").u_locs["ModelMatrix"] = -1;
   m_shaders.at("planet").u_locs["ViewMatrix"] = -1;
   m_shaders.at("planet").u_locs["ProjectionMatrix"] = -1;
+  m_shaders.at("planet").u_locs["LightPosition"] = -1;
+  m_shaders.at("planet").u_locs["Color"] = -1;
+    m_shaders.at("planet").u_locs["flags"] = -1;
     
   m_shaders.emplace("starfield", shader_program{m_resource_path + "shaders/starfield.vert",
                                             m_resource_path + "shaders/starfield.frag"});
