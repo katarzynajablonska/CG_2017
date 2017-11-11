@@ -1,5 +1,7 @@
 #version 150
 
+uniform sampler2D texDiffuse;
+
 uniform int flags;      //control execution of shader
 const int SHADE = 1;    //do Phong shading
 const int CEL = 2;      //do Cel shading
@@ -10,6 +12,7 @@ in  vec3 pass_Normal;
 in  vec3 pass_Color;
 in  vec3 toLight;
 in  vec3 toCamera;
+in  vec2 pass_TexCoord;
 out vec4 out_Color;
 
 //standard Phong shading parameters
@@ -42,21 +45,17 @@ vec3 specular(vec3 N, vec3 L, vec3 V)
 }
 
 void main() {
-    vec3 color;
+    vec3 color = texture(texDiffuse, pass_TexCoord).rgb;
     vec3 l = normalize(toLight);
     vec3 v = normalize(toCamera);
     vec3 n = normalize(pass_Normal);
     if ((flags & SHADE) > 0)
     {
-        color = pass_Color * (
+        color *= (
                                    ambient()
                                    + diffuse(n, l)
                                    + specular(n, l, v)
                                    );
-    }
-    else
-    {
-        color = pass_Color;
     }
     
     if ((flags & CEL) > 0)

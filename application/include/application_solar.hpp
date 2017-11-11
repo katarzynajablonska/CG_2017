@@ -56,15 +56,17 @@ class ApplicationSolar : public Application {
  protected:
   void initializeShaderPrograms();
   void initializeGeometry();
+  void initializeTextures();
   void updateView();
   // all drawing code of a single planet encapsulated here
-  glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, int flags) const;
+    glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, const std::string& name, int flags) const;
 
   // cpu representation of model
   model_object planet_object;
   StarField star_field;
   Orbit orbit;
   int m_cel;    //Cel shading toggle
+    std::map<std::string, GLuint> m_textures{};
 };
 
 #endif
