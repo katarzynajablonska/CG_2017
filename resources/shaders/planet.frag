@@ -1,8 +1,10 @@
 #version 150
 
-uniform int flags;
-const int SHADE = 1;
-const int CEL = 2;
+uniform int flags;      //control execution of shader
+const int SHADE = 1;    //do Phong shading
+const int CEL = 2;      //do Cel shading
+
+const int CEL_SHADES = 6;   //number of discrete shades in Cel shading
 
 in  vec3 pass_Normal;
 in  vec3 pass_Color;
@@ -10,10 +12,17 @@ in  vec3 toLight;
 in  vec3 toCamera;
 out vec4 out_Color;
 
+//standard Phong shading parameters
+//material is assumed to be fully reflective
 vec3 Ka = vec3(0.1, 0.1, 0.1);
 vec3 Kd = vec3(0.7, 0.7, 0.7);
 vec3 Ks = vec3(1.0, 1.0, 1.0);
 float shine = 16.0;
+
+//Cel shading outline parameters
+vec3 outline_color = vec3(1.0, 1.0, 1.0);
+float unlit_outline_thickness = 0.3;
+float lit_outline_thickness = 0.3;
 
 vec3 ambient()
 {
@@ -33,20 +42,35 @@ vec3 specular(vec3 N, vec3 L, vec3 V)
 }
 
 void main() {
+    vec3 color;
+    vec3 l = normalize(toLight);
+    vec3 v = normalize(toCamera);
+    vec3 n = normalize(pass_Normal);
     if ((flags & SHADE) > 0)
     {
-        vec3 l = normalize(toLight);
-        vec3 v = normalize(toCamera);
-        vec3 n = normalize(pass_Normal);
-        out_Color = vec4(pass_Color * (
+        color = pass_Color * (
                                    ambient()
                                    + diffuse(n, l)
                                    + specular(n, l, v)
-                                   ), 1.0);
+                                   );
     }
     else
     {
-        out_Color = vec4(pass_Color, 1.0);
+        color = pass_Color;
     }
+    
+    if ((flags & CEL) > 0)
+    {
+        //Cel shading - interior
+        color = ceil(color * CEL_SHADES)/CEL_SHADES;
+        
+        //Cel shading - outline
+        if (dot(v, n) < mix(unlit_outline_thickness, lit_outline_thickness, max(0.0, dot(n, l))))
+        {
+            color = outline_color;
+        }
+    }
+    
+    out_Color = vec4(color, 1.0);
   //out_Color = vec4(normalize(pass_Normal), 1.0);
 }

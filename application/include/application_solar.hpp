@@ -7,6 +7,7 @@
 
 // gpu representation of model
 
+// encapsulates all stars on the scene
 struct StarField
 {
     std::vector<GLfloat> points;
@@ -20,6 +21,7 @@ struct StarField
     void render(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const;
 };
 
+// encapsulates a circle representing planet's orbit
 struct Orbit
 {
     std::vector<GLfloat> points;
@@ -55,12 +57,14 @@ class ApplicationSolar : public Application {
   void initializeShaderPrograms();
   void initializeGeometry();
   void updateView();
+  // all drawing code of a single planet encapsulated here
   glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, int flags) const;
 
   // cpu representation of model
   model_object planet_object;
   StarField star_field;
   Orbit orbit;
+  int m_cel;    //Cel shading toggle
 };
 
 #endif
