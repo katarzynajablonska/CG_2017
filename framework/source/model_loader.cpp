@@ -155,15 +155,24 @@ std::vector<glm::fvec3> generate_tangents(tinyobj::mesh_t const& model) {
                            model.indices[i * 3 + 2]};
     // access an attribute of xth vert with vector access "attribute[indices[x]]"
     
+      
+      glm::fvec3 d_p1 = positions[indices[1]] - positions[indices[0]];
+      glm::fvec3 d_p2 = positions[indices[2]] - positions[indices[0]];
+      glm::fvec2 d_t1 = texcoords[indices[1]] - texcoords[indices[0]];
+      glm::fvec2 d_t2 = texcoords[indices[2]] - texcoords[indices[0]];
+      float r = 1.0f / (d_t1.x * d_t2.y - d_t1.y * d_t2.x);
+      glm::vec3 tangent = (d_p1 * d_t2.y - d_p2 * d_t1.y) * r;
+      tangents[indices[0]] += tangent;
+      tangents[indices[1]] += tangent;
+      tangents[indices[2]] += tangent;
     // calculate tangent for the triangle and add it to the accumulation tangents of the adjacent vertices
     // see generate_normals() for similar workflow 
   }
   // normalize and orthogonalize accumulated vertex tangents
   for (unsigned i = 0; i < tangents.size(); ++i) {
     // implement orthogonalization and normalization here
+      tangents[i] = glm::normalize(tangents[i] - normals[i] * glm::dot(normals[i], tangents[i]));
   }
-
-  throw std::logic_error("Tangent creation not implemented yet");
 
   return tangents;
 }

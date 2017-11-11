@@ -66,7 +66,8 @@ class ApplicationSolar : public Application {
   StarField star_field;
   Orbit orbit;
   int m_cel;    //Cel shading toggle
-    std::map<std::string, GLuint> m_textures{};
+  std::map<std::string, GLuint> m_textures{};
+  int m_nmap;
 };
 
 #endif

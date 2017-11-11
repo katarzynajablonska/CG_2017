@@ -1,10 +1,12 @@
 #version 150
 
 uniform sampler2D texDiffuse;
+uniform sampler2D texNormal;
 
-uniform int flags;      //control execution of shader
-const int SHADE = 1;    //do Phong shading
-const int CEL = 2;      //do Cel shading
+uniform int flags;          //control execution of shader
+const int SHADE = 1;        //do Phong shading
+const int CEL = 2;          //do Cel shading
+const int NORMAL_MAP = 4;   //do normal mapping
 
 const int CEL_SHADES = 6;   //number of discrete shades in Cel shading
 
@@ -13,6 +15,7 @@ in  vec3 pass_Color;
 in  vec3 toLight;
 in  vec3 toCamera;
 in  vec2 pass_TexCoord;
+in  mat3 TBN;
 out vec4 out_Color;
 
 //standard Phong shading parameters
@@ -49,6 +52,13 @@ void main() {
     vec3 l = normalize(toLight);
     vec3 v = normalize(toCamera);
     vec3 n = normalize(pass_Normal);
+    
+    if ((flags & NORMAL_MAP) > 0)
+    {
+        n = normalize(texture(texNormal, pass_TexCoord).rgb * 2.0 - 1.0);
+        l = normalize(TBN * l);
+        v = normalize(TBN * v);
+    }
     if ((flags & SHADE) > 0)
     {
         color *= (
@@ -71,5 +81,6 @@ void main() {
     }
     
     out_Color = vec4(color, 1.0);
+    //out_Color = vec4(n, 1.0);
   //out_Color = vec4(normalize(pass_Normal), 1.0);
 }
