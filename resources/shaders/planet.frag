@@ -53,19 +53,34 @@ void main() {
     vec3 v = normalize(toCamera);
     vec3 n = normalize(pass_Normal);
     
-    if ((flags & NORMAL_MAP) > 0)
-    {
-        n = normalize(texture(texNormal, pass_TexCoord).rgb * 2.0 - 1.0);
-        l = normalize(TBN * l);
-        v = normalize(TBN * v);
-    }
     if ((flags & SHADE) > 0)
     {
-        color *= (
-                                   ambient()
-                                   + diffuse(n, l)
-                                   + specular(n, l, v)
-                                   );
+        if ((flags & NORMAL_MAP) > 0)
+        {
+            //normal mapping calculations are done in tangent space
+            //we convert necessary vectors here
+            vec3 ts_n = normalize(texture(texNormal, pass_TexCoord).rgb * 2.0 - 1.0);
+            vec3 ts_l = normalize(TBN * l);
+            vec3 ts_v = normalize(TBN * v);
+            vec3 shading = ambient();
+            
+            //we check the original surface direction to avoid shading areas
+            //that are on the dark side of the planet, but have negative z-component in the normal map
+            if (dot(n, l) > 0.0)
+            {
+                shading += diffuse(ts_n, ts_l);
+                shading += specular(ts_n, ts_l, ts_v);
+            }
+            color *= shading;
+        }
+        else
+        {
+            color *= (
+                      ambient()
+                      + diffuse(n, l)
+                      + specular(n, l, v)
+                     );
+        }
     }
     
     if ((flags & CEL) > 0)
