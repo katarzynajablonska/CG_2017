@@ -7,6 +7,12 @@
 
 // gpu representation of model
 
+struct UBO_Data
+{
+    glm::fmat4 view_matrix;
+    glm::fmat4 projection_matrix;
+};
+
 // encapsulates all stars on the scene
 struct StarField
 {
@@ -18,7 +24,7 @@ struct StarField
     GLuint vba;
     
     void Init();
-    void render(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const;
+    void render(const shader_program& shader) const;
 };
 
 // encapsulates a circle representing planet's orbit
@@ -30,7 +36,7 @@ struct Orbit
     GLuint vba;
     
     void Init();
-    void bind(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const;
+    void bind(const shader_program& shader) const;
     void render(const glm::fmat4& model, const shader_program& shader) const;
 };
 
@@ -41,6 +47,7 @@ class ApplicationSolar : public Application {
   // free allocated objects
   ~ApplicationSolar();
 
+  void updateUBO();
   // update uniform locations and values
   void uploadUniforms();
   // update projection matrix
@@ -58,6 +65,7 @@ class ApplicationSolar : public Application {
   void initializeGeometry();
   void initializeTextures();
   void initializeFramebuffer();
+  void initializeUBO();
   void updateView();
   // all drawing code of a single planet encapsulated here
     glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, const std::string& name, int flags) const;
@@ -74,6 +82,8 @@ class ApplicationSolar : public Application {
   int effect; //enabled effects flags
   GLuint quad_vbo; //vertex buffer for a full-screen quad
   GLuint quad_vba;
+  GLuint ubo;
+  UBO_Data ubo_data;
 };
 
 #endif

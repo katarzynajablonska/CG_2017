@@ -6,10 +6,13 @@ layout(location = 1) in vec3 in_Normal;
 layout(location = 2) in vec2 in_TexCoord;
 layout(location = 3) in vec3 in_Tangent;
 
+layout(std140) uniform ubo_data{
+    mat4 ubo_view_matrix;
+    mat4 ubo_projection_matrix;
+};
+
 //Matrix Uniforms as specified with glUniformMatrix4fv
 uniform mat4 ModelMatrix;
-uniform mat4 ViewMatrix;
-uniform mat4 ProjectionMatrix;
 uniform mat4 NormalMatrix;
 uniform vec3 LightPosition;
 uniform vec3 Color;
@@ -23,11 +26,12 @@ out vec3 toCamera;
 
 void main(void)
 {
-    gl_Position = (ProjectionMatrix  * ViewMatrix * ModelMatrix) * vec4(in_Position, 1.0);
+    gl_Position = (ubo_projection_matrix * ubo_view_matrix * ModelMatrix) * vec4(in_Position, 1.0);
+    
     //all computation is done in view space
-    vec4 viewSpacePosition = (ViewMatrix * ModelMatrix) * vec4(in_Position, 1.0);
+    vec4 viewSpacePosition = (ubo_view_matrix * ModelMatrix) * vec4(in_Position, 1.0);
     toCamera = normalize(-viewSpacePosition.xyz); //in view space camera position is always 0.0, 0.0, 0.0
-    toLight = normalize((ViewMatrix * vec4(LightPosition, 1.0)).xyz - viewSpacePosition.xyz);
+    toLight = normalize((ubo_view_matrix * vec4(LightPosition, 1.0)).xyz - viewSpacePosition.xyz);
     
     pass_Normal = normalize((NormalMatrix * vec4(in_Normal, 0.0)).xyz);
     pass_Color = Color;

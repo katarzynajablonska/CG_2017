@@ -83,13 +83,9 @@ void StarField::Init()
     //glPointSize(10.0);
 }
 
-void StarField::render(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const
+void StarField::render(const shader_program& shader) const
 {
     glUseProgram(shader.handle);
-    glUniformMatrix4fv(shader.u_locs.at("ViewMatrix"),
-                       1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(shader.u_locs.at("ProjectionMatrix"),
-                       1, GL_FALSE, glm::value_ptr(projection));
     
     glBindVertexArray(vba);
     glDrawArrays(GL_POINTS, 0, count);
@@ -121,13 +117,9 @@ void Orbit::Init()
     //glPointSize(10.0);
 }
 
-void Orbit::bind(const glm::fmat4& view, const glm::fmat4& projection, const shader_program& shader) const
+void Orbit::bind(const shader_program& shader) const
 {
     glUseProgram(shader.handle);
-    glUniformMatrix4fv(shader.u_locs.at("ViewMatrix"),
-                       1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(shader.u_locs.at("ProjectionMatrix"),
-                       1, GL_FALSE, glm::value_ptr(projection));
     
     glBindVertexArray(vba);
 }
@@ -146,6 +138,7 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     m_cel = 0;
     m_nmap = 0;
     effect = FX_NONE;
+    initializeUBO();
     initializeGeometry();
     initializeShaderPrograms();
     initializeTextures();
@@ -207,6 +200,14 @@ static GLuint loadTexture(const std::string& name)
     return tex;
 }
 
+void ApplicationSolar::initializeUBO()
+{
+    glGenBuffers(1, &ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(ubo_data), &ubo_data, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
 void ApplicationSolar::initializeTextures()
 {
     // diffuse maps
@@ -238,7 +239,7 @@ void ApplicationSolar::render() const {
   glViewport(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-  star_field.render(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("starfield"));
+  star_field.render(m_shaders.at("starfield"));
     
   // bind shader to upload uniforms
   glUseProgram(m_shaders.at("planet").handle);
@@ -268,7 +269,7 @@ void ApplicationSolar::render() const {
   drawPlanet(0.0f, 0.0f, camera_pos, 500.0f, glm::fvec3{1.0, 1.0, 1.0}, "sky", NONE);
     
   //bind orbit shader and send common uniforms
-  orbit.bind(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("orbit"));
+  orbit.bind(m_shaders.at("orbit"));
     
   //draw all orbits
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{5.0f, 5.0f, 5.0f}), m_shaders.at("orbit"));
@@ -331,20 +332,26 @@ glm::fmat4 ApplicationSolar::drawPlanet(float distance, float rotation, glm::fma
     return model_matrix;
 }
 
+void ApplicationSolar::updateUBO()
+{
+    //upload uniform buffer data to GPU
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    GLvoid* ptr = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+    memcpy(ptr, &ubo_data, sizeof(ubo_data));
+    glUnmapBuffer(GL_UNIFORM_BUFFER);
+}
+
 void ApplicationSolar::updateView() {
   // vertices are transformed in camera space, so camera transform must be inverted
   glm::fmat4 view_matrix = glm::inverse(m_view_transform);
-  // upload matrix to gpu
-  glUseProgram(m_shaders.at("planet").handle);
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ViewMatrix"),
-                     1, GL_FALSE, glm::value_ptr(view_matrix));
+
+  ubo_data.view_matrix = view_matrix;
+  updateUBO();
 }
 
 void ApplicationSolar::updateProjection() {
-  // upload matrix to gpu
-  glUseProgram(m_shaders.at("planet").handle);
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"),
-                     1, GL_FALSE, glm::value_ptr(m_view_projection));
+  ubo_data.projection_matrix = m_view_projection;
+  updateUBO();
 }
 
 // update uniform locations
@@ -354,6 +361,27 @@ void ApplicationSolar::uploadUniforms() {
   // bind new shader
   glUseProgram(m_shaders.at("planet").handle);
   
+  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+  unsigned int block_index = glGetUniformBlockIndex(m_shaders.at("planet").handle, "ubo_data");
+  glUniformBlockBinding(m_shaders.at("planet").handle, block_index, 0);
+  glBindBufferBase(GL_UNIFORM_BUFFER, block_index, ubo);
+    
+    // bind new shader
+    glUseProgram(m_shaders.at("starfield").handle);
+    
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    block_index = glGetUniformBlockIndex(m_shaders.at("starfield").handle, "ubo_data");
+    glUniformBlockBinding(m_shaders.at("starfield").handle, block_index, 0);
+    glBindBufferBase(GL_UNIFORM_BUFFER, block_index, ubo);
+    
+    // bind new shader
+    glUseProgram(m_shaders.at("orbit").handle);
+    
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    block_index = glGetUniformBlockIndex(m_shaders.at("orbit").handle, "ubo_data");
+    glUniformBlockBinding(m_shaders.at("orbit").handle, block_index, 0);
+    glBindBufferBase(GL_UNIFORM_BUFFER, block_index, ubo);
+    
   updateView();
   updateProjection();
 }
@@ -417,14 +445,13 @@ void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
 
 // load shader programs
 void ApplicationSolar::initializeShaderPrograms() {
+    
   // store shader program objects in container
   m_shaders.emplace("planet", shader_program{m_resource_path + "shaders/planet.vert",
                                            m_resource_path + "shaders/planet.frag"});
   // request uniform locations for shader program
   m_shaders.at("planet").u_locs["NormalMatrix"] = -1;
   m_shaders.at("planet").u_locs["ModelMatrix"] = -1;
-  m_shaders.at("planet").u_locs["ViewMatrix"] = -1;
-  m_shaders.at("planet").u_locs["ProjectionMatrix"] = -1;
   m_shaders.at("planet").u_locs["LightPosition"] = -1;
   m_shaders.at("planet").u_locs["Color"] = -1;
   m_shaders.at("planet").u_locs["flags"] = -1;
@@ -434,9 +461,6 @@ void ApplicationSolar::initializeShaderPrograms() {
   // shader for stars
   m_shaders.emplace("starfield", shader_program{m_resource_path + "shaders/starfield.vert",
                                             m_resource_path + "shaders/starfield.frag"});
-  // request uniform locations for shader program
-  m_shaders.at("starfield").u_locs["ViewMatrix"] = -1;
-  m_shaders.at("starfield").u_locs["ProjectionMatrix"] = -1;
     
   // shader for orbits
   m_shaders.emplace("orbit", shader_program{m_resource_path + "shaders/orbit.vert",
@@ -444,8 +468,6 @@ void ApplicationSolar::initializeShaderPrograms() {
     
   // request uniform locations for shader program
   m_shaders.at("orbit").u_locs["ModelMatrix"] = -1;
-  m_shaders.at("orbit").u_locs["ViewMatrix"] = -1;
-  m_shaders.at("orbit").u_locs["ProjectionMatrix"] = -1;
     
   // shaders for rendering to off-screen buffer
   m_shaders.emplace("rtt", shader_program{m_resource_path + "shaders/post-processing.vert",
