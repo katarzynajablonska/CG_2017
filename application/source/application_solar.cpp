@@ -21,6 +21,15 @@ using namespace gl;
 
 #include <iostream>
 
+#ifdef __APPLE__
+//assuming __APPLE__ means Retina screen which has 4x smaller pixels
+static const unsigned int VIEWPORT_WIDTH = 640u * 2;
+static const unsigned int VIEWPORT_HEIGHT = 480u * 2;
+#else 
+static const unsigned int VIEWPORT_WIDTH = 640u;
+static const unsigned int VIEWPORT_HEIGHT = 480u;
+#endif
+
 //control flags for planet shader execution
 //meant to be combined using | operator
 enum shader_flags{
@@ -28,6 +37,14 @@ enum shader_flags{
     SHADE = 1,  //enable Phong shading
     CEL = 2,     //enable Cel shading
     NORMAL_MAP = 4    //enable normal mapping
+};
+
+enum postprocessing_effects{
+    FX_NONE = 0,
+    FX_FLIP_X = 1,
+    FX_FLIP_Y = 2,
+    FX_GREYSCALE = 4,
+    FX_BLUR = 8
 };
 
 
@@ -128,12 +145,53 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
 {
     m_cel = 0;
     m_nmap = 0;
+    effect = FX_NONE;
     initializeGeometry();
     initializeShaderPrograms();
     initializeTextures();
+    initializeFramebuffer();
     m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 35.0f});
     star_field.Init();
     orbit.Init();
+}
+
+void ApplicationSolar::initializeFramebuffer()
+{
+    //create and bind off-screen framebuffer
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    
+    //create texture that will be the rendering target
+    glGenTextures(1, &screen_texture);
+    glBindTexture(GL_TEXTURE_2D, screen_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    
+    //create depth buffer for off-screen rendering
+    GLuint depth_buffer;
+    glGenRenderbuffers(1, &depth_buffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    
+    //attach depth buffer to framebuffer
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer);
+    
+    //attach texture to framebuffer
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, screen_texture, 0);
+    
+    //select rendering target
+    GLenum buffers[1] = {GL_COLOR_ATTACHMENT0};
+    glDrawBuffers(1, buffers);
+    
+    //check if framebuffer initialisation succeeded
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        throw std::runtime_error("Failed to initialise framebuffer.");
+    }
+    
+    //restore screen framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 // helper function that loads a texture from a file and registers it with OpenGL
@@ -174,7 +232,12 @@ void ApplicationSolar::initializeTextures()
 }
 
 void ApplicationSolar::render() const {
-  
+    
+  //render off-screen
+  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+  glViewport(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
   star_field.render(glm::inverse(m_view_transform), m_view_projection, m_shaders.at("starfield"));
     
   // bind shader to upload uniforms
@@ -218,7 +281,21 @@ void ApplicationSolar::render() const {
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{27.0f, 27.0f, 27.0f}), m_shaders.at("orbit"));
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{31.0f, 31.0f, 31.0f}), m_shaders.at("orbit"));
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{36.0f, 36.0f, 36.0f}), m_shaders.at("orbit"));
-
+    
+  //render to screen
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+  glUseProgram(m_shaders.at("rtt").handle);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, screen_texture);
+  glUniform1i(m_shaders.at("rtt").u_locs.at("tex"), 0);
+  glUniform1i(m_shaders.at("rtt").u_locs.at("effects"), effect);
+  glUniform1f(m_shaders.at("rtt").u_locs.at("one_over_screen_width"), 1.0f/VIEWPORT_WIDTH);
+  glUniform1f(m_shaders.at("rtt").u_locs.at("one_over_screen_height"), 1.0f/VIEWPORT_HEIGHT);
+  glBindVertexArray(quad_vba);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 glm::fmat4 ApplicationSolar::drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, const std::string& name, int flags) const
@@ -312,6 +389,22 @@ void ApplicationSolar::keyCallback(int key, int scancode, int action, int mods) 
   {
       m_nmap = NORMAL_MAP;
   }
+  else if(key == GLFW_KEY_7 && action == GLFW_PRESS)
+  {
+      effect ^= FX_GREYSCALE;
+  }
+  else if(key == GLFW_KEY_8 && action == GLFW_PRESS)
+  {
+      effect ^= FX_FLIP_X;
+  }
+  else if(key == GLFW_KEY_9 && action == GLFW_PRESS)
+  {
+      effect ^= FX_FLIP_Y;
+  }
+  else if(key == GLFW_KEY_0 && action == GLFW_PRESS)
+  {
+      effect ^= FX_BLUR;
+  }
 }
 
 //handle delta mouse movement input
@@ -353,6 +446,14 @@ void ApplicationSolar::initializeShaderPrograms() {
   m_shaders.at("orbit").u_locs["ModelMatrix"] = -1;
   m_shaders.at("orbit").u_locs["ViewMatrix"] = -1;
   m_shaders.at("orbit").u_locs["ProjectionMatrix"] = -1;
+    
+  // shaders for rendering to off-screen buffer
+  m_shaders.emplace("rtt", shader_program{m_resource_path + "shaders/post-processing.vert",
+      m_resource_path + "shaders/post-processing.frag"});
+  m_shaders.at("rtt").u_locs["tex"] = -1;
+  m_shaders.at("rtt").u_locs["effects"] = -1;
+  m_shaders.at("rtt").u_locs["one_over_screen_width"] = -1;
+  m_shaders.at("rtt").u_locs["one_over_screen_height"] = -1;
 }
 
 // load models
@@ -400,6 +501,26 @@ void ApplicationSolar::initializeGeometry() {
   planet_object.draw_mode = GL_TRIANGLES;
   // transfer number of indices to model object 
   planet_object.num_elements = GLsizei(planet_model.indices.size());
+    
+    
+  // generate data for full-screen quad
+  glGenVertexArrays(1, &quad_vba);
+  glBindVertexArray(quad_vba);
+    
+  // 2 triangles forming a quad
+  static const GLfloat quadData[] = {
+                                      -1.0f, -1.0f, 0.0f,
+                                      1.0f, -1.0f, 0.0f,
+                                      -1.0f, 1.0f, 0.0f,
+                                      -1.0f, 1.0f, 0.0f,
+                                      1.0f, -1.0f, 0.0f,
+                                      1.0f, 1.0f, 0.0f
+                                    };
+  glGenBuffers(1, &quad_vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, quad_vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(quadData), quadData, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+  glEnableVertexAttribArray(0);
 }
 
 ApplicationSolar::~ApplicationSolar() {

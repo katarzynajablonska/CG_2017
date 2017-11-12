@@ -57,6 +57,7 @@ class ApplicationSolar : public Application {
   void initializeShaderPrograms();
   void initializeGeometry();
   void initializeTextures();
+  void initializeFramebuffer();
   void updateView();
   // all drawing code of a single planet encapsulated here
     glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, const std::string& name, int flags) const;
@@ -68,6 +69,11 @@ class ApplicationSolar : public Application {
   int m_cel;    //Cel shading toggle
   std::map<std::string, GLuint> m_textures{};
   int m_nmap;
+  GLuint framebuffer; //for off-screen rendering
+  GLuint screen_texture; //off-screen rendering target
+  int effect; //enabled effects flags
+  GLuint quad_vbo; //vertex buffer for a full-screen quad
+  GLuint quad_vba;
 };
 
 #endif
