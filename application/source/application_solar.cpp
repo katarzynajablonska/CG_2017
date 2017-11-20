@@ -188,15 +188,31 @@ void ApplicationSolar::initializeFramebuffer()
 }
 
 // helper function that loads a texture from a file and registers it with OpenGL
-static GLuint loadTexture(const std::string& name)
+static GLuint loadTexture(const std::string& name, bool font = false)
 {
     pixel_data data = texture_loader::file(name);
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, data.width, data.height, 0, data.channels, data.channel_type, data.ptr());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    
+    //font textures need special treatment
+    if (font)
+    {
+        //load texture with alpha channel
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, data.width, data.height, 0, data.channels, data.channel_type, data.ptr());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        
+        //ensure the texture doesn't wrap around at the edges - this causes artifacts
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+    else
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, data.width, data.height, 0, data.channels, data.channel_type, data.ptr());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    }
     return tex;
 }
 
@@ -230,6 +246,110 @@ void ApplicationSolar::initializeTextures()
     m_textures.insert(std::pair<std::string, GLuint>("mercury_normal", loadTexture(m_resource_path + "textures/mercury_normal.png")));
     m_textures.insert(std::pair<std::string, GLuint>("pluto_normal", loadTexture(m_resource_path + "textures/pluto_normal.png")));
     m_textures.insert(std::pair<std::string, GLuint>("venus_normal", loadTexture(m_resource_path + "textures/venus_normal.png")));
+    
+    m_textures.insert(std::pair<std::string, GLuint>("font_texture", loadTexture(m_resource_path + "textures/a-font.png", true)));
+}
+
+void ApplicationSolar::drawText(float x, float y, float size, const std::string& text, glm::fvec4 color) const
+{
+    // size of a letter in texture coordinates for 16 * 16 letter texture
+    float tex_letter_size = 1.0/16;
+    
+    // storage for our vetrex arrays
+    std::vector<GLfloat> positions(text.length() * 3 * 6);
+    std::vector<GLfloat> colors(text.length() * 4 * 6, 1.0);
+    std::vector<GLfloat> tex_coords(text.length() * 2 * 6);
+    
+    // drawText operates in (0.0, 0.0) to (800.0, 600.0) space
+    // we need to translate it to device-independent space from (-1.0, -1.0) to (1.0, 1.0)
+    float x_size = size / 800.0;
+    float y_size = size / 600.0;
+    float rx = (x / 400.0) - 1.0;
+    float ry = (y / 300.0) - 1.0;
+    
+    // vertex array for our whole text
+    GLuint vba;
+    
+    glGenVertexArrays(1, &vba);
+    glBindVertexArray(vba);
+    
+    // compute vertex data for each letter
+    // we will be drawing two triangles for each letter
+    for(int i = 0; i < text.length(); i++)
+    {
+        // compute vetrex positions for a letter
+        int p = i * 6 * 3;
+        positions[p] = rx + i * x_size; positions[p + 1] = ry;
+        positions[p + 3] = rx + (i + 1.0) * x_size; positions[p + 4] = ry;
+        positions[p + 6] = rx + i * x_size; positions[p + 7] = ry + y_size;
+        positions[p + 9] = rx + i * x_size; positions[p + 10] = ry + y_size;
+        positions[p + 12] = rx + (i + 1.0) * x_size; positions[p + 13] = ry;
+        positions[p + 15] = rx + (i + 1.0) * x_size; positions[p + 16] = ry + y_size;
+        
+        // copy the input color to all vertices
+        int c = i * 6 * 4;
+        colors[c] = colors[c + 4] = colors[c + 8] = colors[c + 12] = colors[c + 16] = colors[c + 20] = color[0];
+        colors[c + 1] = colors[c + 5] = colors[c + 9] = colors[c + 13] = colors[c + 17] = colors[c + 21] = color[1];
+        colors[c + 2] = colors[c + 6] = colors[c + 10] = colors[c + 14] = colors[c + 18] = colors[c + 22] = color[2];
+        colors[c + 3] = colors[c + 7] = colors[c + 11] = colors[c + 15] = colors[c + 19] = colors[c + 23] = color[3];
+        
+        // compute texture coordinates of the letter
+        // the texture is indexed from top left and has letters in ASCII-order
+        int tx = text[i] % 16;
+        int ty = 15 - text[i] / 16;
+        
+        // compute texture coordinates for each vertex
+        int t = i * 6 * 2;
+        
+        tex_coords[t] = tx * tex_letter_size; tex_coords[t + 1] = ty * tex_letter_size;
+        tex_coords[t + 2] = (tx + 1) * tex_letter_size; tex_coords[t + 3] = ty * tex_letter_size;
+        tex_coords[t + 4] = tx * tex_letter_size; tex_coords[t + 5] = (ty + 1) * tex_letter_size;
+        tex_coords[t + 6] = tx * tex_letter_size; tex_coords[t + 7] = (ty + 1) * tex_letter_size;
+        tex_coords[t + 8] = (tx + 1) * tex_letter_size; tex_coords[t + 9] = ty * tex_letter_size;
+        tex_coords[t + 10] = (tx + 1) * tex_letter_size; tex_coords[t + 11] = (ty + 1) * tex_letter_size;
+    }
+    
+    GLuint vbo[3];
+    glGenBuffers(3, vbo);
+    
+    // copy vertex positions to GPU
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(float), &positions[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+    
+    // copy vertex colors to GPU
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(float), &colors[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(1);
+    
+    // copy vertex texture coordinates to GPU
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+    glBufferData(GL_ARRAY_BUFFER, tex_coords.size() * sizeof(float), &tex_coords[0], GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(2);
+    
+    // activate texture and shader
+    glUseProgram(m_shaders.at("font").handle);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1i(m_shaders.at("font").u_locs.at("tex"), 0);
+    glBindTexture(GL_TEXTURE_2D, m_textures.at("font_texture"));
+    
+    // enable alpha blending
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // draw the text
+    glDrawArrays(GL_TRIANGLES, 0, text.size() * 6);
+    
+    // clean up created buffers
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glDeleteBuffers(3, vbo);
+    glDeleteVertexArrays(1, &vba);
+
 }
 
 void ApplicationSolar::render() const {
@@ -267,6 +387,7 @@ void ApplicationSolar::render() const {
   // the position of the skysphere is always the same as the position of the camera
   glm::fmat4 camera_pos = glm::translate(glm::fmat4{}, glm::vec3(m_view_transform[3]));
   drawPlanet(0.0f, 0.0f, camera_pos, 500.0f, glm::fvec3{1.0, 1.0, 1.0}, "sky", NONE);
+    //drawPlanet(0.0f, 0.0f, camera_pos, 500.0f, glm::fvec3{1.0, 1.0, 1.0}, "font_texture", NONE);
     
   //bind orbit shader and send common uniforms
   orbit.bind(m_shaders.at("orbit"));
@@ -282,6 +403,9 @@ void ApplicationSolar::render() const {
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{27.0f, 27.0f, 27.0f}), m_shaders.at("orbit"));
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{31.0f, 31.0f, 31.0f}), m_shaders.at("orbit"));
   orbit.render(glm::scale(glm::fmat4{}, glm::fvec3{36.0f, 36.0f, 36.0f}), m_shaders.at("orbit"));
+    
+    drawText(0, 0, 32, "Test", glm::fvec4{1.0, 0.0, 0.0, 1.0});
+    drawText(400, 300, 24, "QWERTZUIOP!/()cjvfnjnvjn22334$%&", glm::vec4{0.0, 1.0, 0.0, 1.0});
     
   //render to screen
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -476,6 +600,11 @@ void ApplicationSolar::initializeShaderPrograms() {
   m_shaders.at("rtt").u_locs["effects"] = -1;
   m_shaders.at("rtt").u_locs["one_over_screen_width"] = -1;
   m_shaders.at("rtt").u_locs["one_over_screen_height"] = -1;
+    
+  // shader for font
+  m_shaders.emplace("font", shader_program{m_resource_path + "shaders/font.vert",
+        m_resource_path + "shaders/font.frag"});
+  m_shaders.at("font").u_locs["tex"] = -1;
 }
 
 // load models

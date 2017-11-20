@@ -67,6 +67,7 @@ class ApplicationSolar : public Application {
   void initializeFramebuffer();
   void initializeUBO();
   void updateView();
+    void drawText(float x, float y, float size, const std::string& text, glm::fvec4 color) const;
   // all drawing code of a single planet encapsulated here
     glm::fmat4 drawPlanet(float distance, float rotation, glm::fmat4 position, float scale, glm::fvec3 color, const std::string& name, int flags) const;
 
